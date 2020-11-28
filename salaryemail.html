@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Send salary</title>
+    <!-- 生产环境版本，优化了尺寸和速度 -->
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <!-- 引入样式 -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/element-ui/lib/theme-chalk/index.css"
+    />
+    <!-- 引入组件库 -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://smtpjs.com/v3/smtp.js"></script>
+    <script src="emailer.js"></script>
+    <style>
+      .el-row {
+        margin-bottom: 20px;
+      }
+      .el-row:last-child {
+        margin-bottom: 0;
+      }
+      .el-col {
+        border-radius: 4px;
+      }
+      .bg-purple-dark {
+        background: #99a9bf;
+      }
+      .bg-purple {
+        background: #d3dce6;
+      }
+      .bg-purple-light {
+        background: #e5e9f2;
+      }
+      .grid-content {
+        border-radius: 4px;
+        min-height: 36px;
+      }
+      .row-bg {
+        padding: 10px 0;
+        background-color: #f9fafc;
+      }
+      .el-col p {
+        margin-left: 10px;
+      }
+      .title {
+        display: flex;
+        justify-content: center;
+      }
+      .container {
+        margin: 20px 50px;
+      }
+      .el-table .row-sent {
+        background-color: #0d58a6;
+        color: white;
+      }
+      .el-table .row-failed {
+        background-color: #a66300;
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="container">
+        <el-tabs v-model="activeName" @tab-click="handleClick">
+          <el-tab-pane label="发送邮件" name="first">
+            <el-container>
+              <el-main>
+                <el-row type="flex" justify="space-around" :gutter="20">
+                  <el-col :span="10">
+                    <div class="grid-content">
+                      <el-upload
+                        ref="upload"
+                        class="upload-demo"
+                        action="excelToObj"
+                        :limit="1"
+                        :auto-upload="false"
+                        :on-remove="handleRemove"
+                        :before-remove="beforeRemove"
+                        :on-change="excelToObj"
+                        :accept="accept"
+                        :on-exceed="handleExceed"
+                        :file-list="fileList"
+                      >
+                        <el-button size="small" type="primary"
+                          >点击上传</el-button
+                        >
+                        <div slot="tip" class="el-upload__tip">
+                          上传包含需要发送数据的excel文件
+                        </div>
+                      </el-upload>
+                    </div>
+                  </el-col>
+                  <el-col :span="10">
+                    <div class="grid-content">
+                      <el-button
+                        size="small"
+                        type="primary"
+                        @click="sendSelected"
+                        >批量发送邮件</el-button
+                      >
+                    </div>
+                  </el-col>
+                </el-row>
+              </el-main>
+            </el-container>
+            <el-container>
+              <el-main>
+                <template>
+                  <el-table
+                    :data="tableData"
+                    size="small"
+                    @selection-change="rowSelected"
+                    :row-class-name="rowClass"
+                    :key="new Date().getTime()"
+                  >
+                    <!-- <template v-if="tableField.length < 0">
+                      <el-table-column type="index" label="序号">
+                      </el-table-column>
+                      <el-table-column
+                        type="selection"
+                        label="选择"
+                      ></el-table-column>
+                    </template> -->
+
+                    <template v-for="(item, index) in tableField">
+                      <el-table-column
+                        v-if="tableField[index].type!='ops'"
+                        :key="tableField[index].name"
+                        :prop="tableField[index].name"
+                        :label="tableField[index].label"
+                        :type="tableField[index].type"
+                        :width="tableField[index].width"
+                      ></el-table-column>
+                      <el-table-column
+                        v-else
+                        :key="tableField[index].name"
+                        :prop="tableField[index].name"
+                        :label="tableField[index].label"
+                        :type="tableField[index].type"
+                        :width="tableField[index].width"
+                      >
+                        <el-button
+                          slot-scope="scope"
+                          type="primary"
+                          size="mini"
+                          @click="sendByRow(scope.row,scope.$index)"
+                          >发送邮件</el-button
+                        >
+                      </el-table-column>
+                    </template>
+                  </el-table>
+                </template>
+              </el-main>
+            </el-container>
+            <el-container>
+              <el-main>
+                <el-collapse>
+                  <el-collapse-item title="发送信息>" name="1">
+                    <el-input
+                      type="textarea"
+                      rows="20"
+                      v-model="feedback"
+                      readonly
+                      resize="none"
+                    >
+                    </el-input>
+                  </el-collapse-item>
+                </el-collapse>
+              </el-main>
+            </el-container>
+          </el-tab-pane>
+          <el-tab-pane label="设置发送邮箱" name="second">
+            <el-main>
+              <el-collapse>
+                <el-collapse-item title="发送邮箱设置" name="1">
+                  <el-row
+                    type="flex"
+                    class="row-bg"
+                    justify="center"
+                    :gutter="20"
+                  >
+                    <!-- <el-col :span="5"
+                      ><div class="grid-content">
+                        <p>SMTP服务器地址：</p>
+                        <el-input
+                          v-model="host"
+                          placeholder="例如：stmp.qq.com"
+                        ></el-input></div
+                    ></el-col> -->
+                    <el-col :span="5"
+                      ><div class="grid-content">
+                        <p>发送人邮箱：</p>
+                        <el-input
+                          v-model="account"
+                          placeholder="例如：dada@qq.com"
+                        ></el-input></div
+                    ></el-col>
+                    <!-- <el-col :span="5"
+                      ><div class="grid-content">
+                        <p>发送邮箱密码：</p>
+                        <el-input
+                          type="password"
+                          v-model="password"
+                          placeholder="在邮箱网页端设置客户端专用密码"
+                        ></el-input></div
+                    ></el-col> -->
+                    <el-col :span="5"
+                      ><div class="grid-content">
+                        <el-tooltip
+                          class="item"
+                          effect="dark"
+                          :content="tip"
+                          placement="top-start"
+                        >
+                          <p>发送邮箱安全token：</p>
+                        </el-tooltip>
+                        <el-input
+                          type="password"
+                          v-model="secureToken"
+                          placeholder="安全token"
+                        ></el-input></div
+                    ></el-col>
+                    <el-col :span="5"
+                      ><div class="grid-content">
+                        <p>发送人：</p>
+                        <el-input
+                          v-model="sender"
+                          placeholder="发送人的名字，例如张三"
+                        ></el-input></div
+                    ></el-col>
+                  </el-row>
+                </el-collapse-item>
+                <el-collapse-item title="邮件内容模板" name="2">
+                  <el-row type="flex" class="row-bg" justify="space-around">
+                    <el-col :span="6"
+                      ><div class="grid-content">
+                        <p>邮件主题</p>
+                        <el-input
+                          type="textarea"
+                          resize="none"
+                          :rows="15"
+                          placeholder="请输入内容"
+                          v-model="subject"
+                        ></el-input></div
+                    ></el-col>
+                    <el-col :span="6"
+                      ><div class="grid-content">
+                        <p>邮件前部内容:</p>
+                        <el-input
+                          type="textarea"
+                          resize="none"
+                          :rows="15"
+                          placeholder="请输入内容"
+                          v-model="preWords"
+                        ></el-input></div
+                    ></el-col>
+                    <el-col :span="6"
+                      ><div class="gridContent">
+                        <p>邮件后部内容:</p>
+                        <el-input
+                          type="textarea"
+                          resize="none"
+                          :rows="15"
+                          placeholder="请输入内容"
+                          v-model="postWords"
+                        ></el-input></div
+                    ></el-col>
+                  </el-row>
+                </el-collapse-item>
+                <el-collapse-item title="帮助" name="3">
+                  <p>
+                    <h2>1、发送邮箱设置</h2>
+                    <ol>
+                      <li>发送人邮箱，即使用人的邮箱；发送人，即使用人的名字。</li>
+                      <li>发送邮箱安全token。<ul>
+                        <li>开启发送邮箱SMTP服务，参考<a href="https://service.mail.qq.com/cgi-bin/help?subtype=1&&id=28&&no=166" target="_blank">QQ邮箱开启方式</a></li>
+                        <li>在发送邮箱服务内设置客户端专用密码，参考<a href="https://service.mail.qq.com/cgi-bin/help?subtype=1&id=28&no=1001256" target="_blank">QQ授权码设置</a></li>
+                        <li>生成安全token
+                          <ul>
+                            <li>访问<a href="https://www.smtpjs.com" target="_blank">www.smtpjs.com</a></li>
+                            <li>点击"Encrypt your SMTP credentials"，输入邮箱的相关信息。<br>
+                            <img src="token设置.jpg" alt="" width="50%"><br>
+                            邮箱服务器和端口如何填写，参考<a href="https://service.mail.qq.com/cgi-bin/help?subtype=1&&no=1000557&&id=20010">QQ邮箱服务器设置</a>
+                          </li>
+                          <li>把生成的token填入"发送邮箱设置"的"发送邮箱安全token"中。</li>
+                          </ul>                          
+                        </li>
+                        <li></li>
+                      </ul></li>
+                    </ol>
+                    <h2>2、其他设置</h2>
+                    <ol>
+                      <li>邮件主题根据需要填写。</li>
+                      <li>邮件前部内容，会出现在表格前面。</li>
+                      <li>邮件后部内容，会出现在表格后面。</li>
+                    </ol>
+                    <h2>3、基本使用流程</h2>
+                    <ol>
+                      <li>参考模板表格内容填写。表格中必须要有<b>“姓名”</b>、<b>“邮箱”</b>两列。</li>
+                      <li>上传表格。</li>
+                      <li>点击“批量发送邮件”按钮时，如果没有勾选任何条目，则会全部发送；如果有勾选条目，则只发送勾选的信息。也可以点击表格内的"发送邮件"，发送单条信息。</li>
+                      <li>邮件发送成功，表格内信息会变蓝色；如果失败会变红色。</li>
+                      <li>邮件发送的返回信息，可以在"发送信息"中查看。</li>
+                    </ol>
+                  </p>
+                </el-collapse-item>
+                
+              </el-collapse>
+            </el-main>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </div>
+
+    <script>
+      let SheetJSFT = [
+        "xlsx",
+        "xlsb",
+        "xlsm",
+        "xls",
+        "xml",
+        "csv",
+        "txt",
+        "ods",
+        "fods",
+        "uos",
+        "sylk",
+        "dif",
+        "dbf",
+        "prn",
+        "qpw",
+        "123",
+        "wb*",
+        "wq*",
+        "html",
+        "htm",
+      ]
+        .map(function (x) {
+          return "." + x;
+        })
+        .join(",");
+      let COL_WIDTH = "100%";
+
+      let COL_OPS = [
+        { name: "序号", label: "序号", width: COL_WIDTH, type: "index" },
+        { name: "选择", label: "选择", width: COL_WIDTH, type: "selection" },
+        { name: "操作", label: "操作", width: COL_WIDTH, type: "ops" },
+      ];
+
+      // let COL_OPS = [
+      //   { name: "序号", label: "序号", type: "index" },
+      //   { name: "选择", label: "选择", type: "selection" },
+      //   { name: "操作", label: "操作", type: "ops" },
+      // ];
+
+      let vm = new Vue({
+        el: "#app",
+        data: {
+          activeName: "first",
+          secureToken: "",
+          // host: "88.smtp.com",
+          account: "",
+          // password: "QTbmvEReNYtGU2Jyy",
+          sender: "",
+          fileList: [],
+          accept: SheetJSFT,
+          tableField: [],
+          tableData: [],
+          rowStatus: [], //1发送后成功，-1发送后不成功，其他没发送
+          selected: [],
+          host: "",
+          from: "",
+          subject: "auto",
+          preWords: "",
+          postWords: "",
+          htmlHeaderTemp: `<!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>salary</title>
+          <style>
+              table {
+                  border-collapse:collapse;
+                  font-size: 10px;
+              }
+              th,td {
+                  border: 1px solid black;
+                  padding: 4px;
+              }
+          </style>
+      </head>
+      <body>`,
+          htmlFooterTemp: `</body>
+      </html>`,
+          backmessage: "",
+          feedback: "发送信息：\n",
+          tip: "访问https://www.smtpjs.com/， 点击'Encrypt your SMTP credentials'生成token.",
+        },
+        methods: {
+          handleClick(tab, event) {
+            console.log(tab, event);
+          },
+          handleRemove(file, fileList) {
+            console.log(file, fileList);
+          },
+          handlePreview(file) {
+            console.log(file);
+          },
+          handleExceed(files, fileList) {
+            this.$message.warning(
+              `当前限制选择 1 个文件，本次选择了 ${
+                files.length
+              } 个文件，共选择了 ${files.length + fileList.length} 个文件`
+            );
+          },
+          beforeRemove(file, fileList) {
+            // return this.$confirm(`确定移除 ${file.name}？`);
+          },
+          excelToObj(file, fileList) {
+            // console.log(file);
+            // let workbook = XLSX.readFile(file.raw, { type: "buffer" });
+            // let sheetname = workbook.SheetNames[0];
+            // let sheet = workbook.Sheets[sheetname];
+            // console.log(workbook);
+            // console.log(workbook.SheetNames);
+            // console.log(fileList);
+            // obj = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            // console.log(file);
+            let reader = new FileReader();
+            let this_ = this;
+            reader.onload = function (e) {
+              data = e.target.result;
+              let workbook = XLSX.read(data, { type: "buffer" });
+              let sheetname = workbook.SheetNames[0];
+              let sheet = workbook.Sheets[sheetname];
+              obj = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+              // console.log(obj);
+              if (obj.length > 1) {
+                this_.tableField = JSON.parse(JSON.stringify(COL_OPS));
+                this_.tableData = [];
+                for (let i = 0; i < obj[0].length; i++) {
+                  this_.tableField.push({
+                    name: obj[0][i],
+                    label: obj[0][i],
+                    width: COL_WIDTH,
+                    type: "",
+                  });
+                }
+                for (let r = 1; r < obj.length; r++) {
+                  //   row = { 序号: r };
+                  let row = {};
+                  for (let i = 0; i < obj[0].length; i++) {
+                    row[obj[0][i]] = obj[r][i];
+                  }
+                  this_.tableData.push(row);
+                  this_.rowStatus.push(0);
+                }
+              }
+            };
+            reader.readAsArrayBuffer(file.raw);
+          },
+          rowSelected(sel) {
+            this.selected = sel;
+          },
+          sendByRow(row, index) {
+            console.log(index, row);
+            console.log("index:", index, "row:", JSON.stringify(row));
+            let html = XLSX.utils.sheet_to_html(
+              XLSX.utils.json_to_sheet([row]),
+              {
+                header: this.htmlHeader,
+                footer: this.htmlFooter,
+                id: "sl",
+              }
+            );
+            // let to = "<" + row["姓名"].trim() + ">" + row["邮箱"];
+            let to = "<" + row["姓名"] + "> " + row["邮箱"];
+            console.log(html);
+            // let result = this.sendEmail(
+            //   html,
+            //   this.host,
+            //   this.sender,
+            //   this.password,
+            //   this.emailFrom,
+            //   to,
+            //   this.subject
+            // );
+            Email.send({
+              SecureToken: this.secureToken,
+              // Host: host,
+              // Username: sender,
+              // Password: pwd,
+              // Sender: this.sender,
+              To: to,
+              From: this.emailFrom,
+              Subject: this.subject,
+              Body: html,
+            }).then((message) => {
+              console.log(message);
+              let tableContent = JSON.stringify(row);
+              if (message == "OK") {
+                this.rowStatus[index] = 1;
+                this.feedback =
+                  this.feedback +
+                  "sent successfully \n" +
+                  tableContent +
+                  "\n\n";
+              } else {
+                this.rowStatus[index] = 0;
+                this.feedback =
+                  this.feedback + "sent failed \n" + tableContent + "\n\n";
+              }
+            });
+            // message = "Off";
+            // if (message == "OK") {
+            //   this.rowStatus[index] = 1;
+            //   this.feedback =
+            //     this.feedback + "sent successfully \n" +JSON.stringify(row) + "\n\n";
+            // } else {
+            //   this.rowStatus[index] = -1;
+            //   this.feedback =
+            //     this.feedback + "sent failed \n" + JSON.stringify(row) + "\n\n";
+            // }
+            this.$forceUpdate();
+          },
+          sendSelected() {
+            let this_ = this;
+            if (this.selected.length > 0) {
+              this.selected.forEach(this_.sendByRow);
+            } else {
+              this.tableData.forEach(this_.sendByRow);
+            }
+          },
+          rowClass({ row, rowIndex }) {
+            if (this.rowStatus[rowIndex] == -1) {
+              return "row-failed";
+            } else if (this.rowStatus[rowIndex] == 1) {
+              return "row-sent";
+            }
+          },
+          setRowKey(row) {
+            return new Date().getTime();
+          },
+        },
+        computed: {
+          htmlHeader: function () {
+            return this.htmlHeaderTemp + "<p>" + this.preWords + "</p>";
+          },
+          htmlFooter: function () {
+            return "<p>" + this.postWords + "</p>" + this.htmlFooterTemp;
+          },
+          emailFrom: function () {
+            return "<" + this.sender.trim() + "> " + this.account;
+            // return this.account;
+          },
+        },
+      });
+    </script>
+  </body>
+</html>
