@@ -4,14 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Send salary</title>
-    <!-- 生产环境版本，优化了尺寸和速度 -->
     <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
-    <!-- 引入样式 -->
     <link
       rel="stylesheet"
       href="https://unpkg.com/element-ui/lib/theme-chalk/index.css"
     />
-    <!-- 引入组件库 -->
     <script src="https://unpkg.com/element-ui/lib/index.js"></script>
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
     <script src="https://smtpjs.com/v3/smtp.js"></script>
@@ -118,15 +115,6 @@
                     :row-class-name="rowClass"
                     :key="new Date().getTime()"
                   >
-                    <!-- <template v-if="tableField.length < 0">
-                      <el-table-column type="index" label="序号">
-                      </el-table-column>
-                      <el-table-column
-                        type="selection"
-                        label="选择"
-                      ></el-table-column>
-                    </template> -->
-
                     <template v-for="(item, index) in tableField">
                       <el-table-column
                         v-if="tableField[index].type!='ops'"
@@ -184,14 +172,6 @@
                     justify="center"
                     :gutter="20"
                   >
-                    <!-- <el-col :span="5"
-                      ><div class="grid-content">
-                        <p>SMTP服务器地址：</p>
-                        <el-input
-                          v-model="host"
-                          placeholder="例如：stmp.qq.com"
-                        ></el-input></div
-                    ></el-col> -->
                     <el-col :span="5"
                       ><div class="grid-content">
                         <p>发送人邮箱：</p>
@@ -200,15 +180,6 @@
                           placeholder="例如：dada@qq.com"
                         ></el-input></div
                     ></el-col>
-                    <!-- <el-col :span="5"
-                      ><div class="grid-content">
-                        <p>发送邮箱密码：</p>
-                        <el-input
-                          type="password"
-                          v-model="password"
-                          placeholder="在邮箱网页端设置客户端专用密码"
-                        ></el-input></div
-                    ></el-col> -->
                     <el-col :span="5"
                       ><div class="grid-content">
                         <el-tooltip
@@ -352,20 +323,12 @@
         { name: "操作", label: "操作", width: COL_WIDTH, type: "ops" },
       ];
 
-      // let COL_OPS = [
-      //   { name: "序号", label: "序号", type: "index" },
-      //   { name: "选择", label: "选择", type: "selection" },
-      //   { name: "操作", label: "操作", type: "ops" },
-      // ];
-
       let vm = new Vue({
         el: "#app",
         data: {
           activeName: "first",
           secureToken: "",
-          // host: "88.smtp.com",
           account: "",
-          // password: "QTbmvEReNYtGU2Jyy",
           sender: "",
           fileList: [],
           accept: SheetJSFT,
@@ -419,19 +382,7 @@
               } 个文件，共选择了 ${files.length + fileList.length} 个文件`
             );
           },
-          beforeRemove(file, fileList) {
-            // return this.$confirm(`确定移除 ${file.name}？`);
-          },
           excelToObj(file, fileList) {
-            // console.log(file);
-            // let workbook = XLSX.readFile(file.raw, { type: "buffer" });
-            // let sheetname = workbook.SheetNames[0];
-            // let sheet = workbook.Sheets[sheetname];
-            // console.log(workbook);
-            // console.log(workbook.SheetNames);
-            // console.log(fileList);
-            // obj = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            // console.log(file);
             let reader = new FileReader();
             let this_ = this;
             reader.onload = function (e) {
@@ -453,7 +404,6 @@
                   });
                 }
                 for (let r = 1; r < obj.length; r++) {
-                  //   row = { 序号: r };
                   let row = {};
                   for (let i = 0; i < obj[0].length; i++) {
                     row[obj[0][i]] = obj[r][i];
@@ -479,24 +429,10 @@
                 id: "sl",
               }
             );
-            // let to = "<" + row["姓名"].trim() + ">" + row["邮箱"];
             let to = "<" + row["姓名"] + "> " + row["邮箱"];
             console.log(html);
-            // let result = this.sendEmail(
-            //   html,
-            //   this.host,
-            //   this.sender,
-            //   this.password,
-            //   this.emailFrom,
-            //   to,
-            //   this.subject
-            // );
             Email.send({
               SecureToken: this.secureToken,
-              // Host: host,
-              // Username: sender,
-              // Password: pwd,
-              // Sender: this.sender,
               To: to,
               From: this.emailFrom,
               Subject: this.subject,
@@ -517,16 +453,6 @@
                   this.feedback + "sent failed \n" + tableContent + "\n\n";
               }
             });
-            // message = "Off";
-            // if (message == "OK") {
-            //   this.rowStatus[index] = 1;
-            //   this.feedback =
-            //     this.feedback + "sent successfully \n" +JSON.stringify(row) + "\n\n";
-            // } else {
-            //   this.rowStatus[index] = -1;
-            //   this.feedback =
-            //     this.feedback + "sent failed \n" + JSON.stringify(row) + "\n\n";
-            // }
             this.$forceUpdate();
           },
           sendSelected() {
@@ -557,7 +483,6 @@
           },
           emailFrom: function () {
             return "<" + this.sender.trim() + "> " + this.account;
-            // return this.account;
           },
         },
       });
